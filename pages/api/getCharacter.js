@@ -6,15 +6,45 @@ const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 export default async function handler(req, res) {
-  const { data, error } = await supabase
+  const moodParam = req.query.mood;
+
+  const { data: profile, error: profileError } = await supabase
     .from('character_profiles')
     .select('*')
     .eq('id', 'b3bc711e-0f25-48a4-a8a4-a6c4744c2325')
     .single();
 
-  if (error) {
-    return res.status(500).json({ error: error.message });
+  if (profileError) {
+    return res.status(500).json({ error: profileError.message });
   }
 
-  return res.status(200).json(data);
+  if (moodParam) {
+    const { data: moods, error: moodError } = await supabase
+      .from('character_moods')
+      .select('*')
+      .eq('character_id', profile.id)
+      .ilike('mood_name', moodParam); // Case-insensitive match
+
+    if (moodError) {
+      return res.status(500).json({ error: moodError.message });
+    }
+
+    if (!moods || moods.length === 0) {
+      return res.status(404).json({ error: `Mood "${moodParam}" not found.` });
+    }
+
+    return res.status(200).json({ mood: moods[0] });
+  }
+
+  // Default: return full profile + all moods
+  const { data: allMoods, error: moodsError } = await supabase
+    .from('character_moods')
+    .select('*')
+    .eq('character_id', profile.id);
+
+  if (moodsError) {
+    return res.status(500).json({ error: moodsError.message });
+  }
+
+  return res.status(200).json({ ...profile, moods: allMoods });
 }
